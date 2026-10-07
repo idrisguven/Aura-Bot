@@ -30,6 +30,7 @@ const welcome = require("./welcome.js");
 const survey = require("./survey.js");
 const suggestions = require("./suggestions.js");
 const quitLog = require("./quitlog.js");
+const tickets = require("./tickets.js");
 
 const PLAYER_ROLE_ID = "1557353276641644634";
 const RULES_ACCEPT_BUTTON_ID = "rules_accept";
@@ -125,6 +126,19 @@ const commands = [
                         .setAutocomplete(true)
                         .setRequired(false)
                 )
+        )
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+        .toJSON(),
+
+    new SlashCommandBuilder()
+        .setName("ticket-panel")
+        .setDescription("Posts the ticket panel (type menu) in a channel.")
+        .addChannelOption(option =>
+            option
+                .setName("channel")
+                .setDescription("Channel to post the ticket panel in")
+                .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
+                .setRequired(true)
         )
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
         .toJSON(),
@@ -445,6 +459,26 @@ client.on("interactionCreate", async interaction => {
 
         if (interaction.isButton() && survey.isVoteButton(interaction.customId)) {
             return await survey.handleVote(interaction);
+        }
+
+        if (interaction.isChatInputCommand() && interaction.commandName === "ticket-panel") {
+            return await tickets.handlePanelCommand(interaction, client);
+        }
+
+        if (interaction.isModalSubmit() && tickets.isPanelForm(interaction.customId)) {
+            return await tickets.handlePanelForm(interaction);
+        }
+
+        if (interaction.isStringSelectMenu() && interaction.customId === tickets.SELECT_ID) {
+            return await tickets.handleSelect(interaction, client);
+        }
+
+        if (interaction.isButton() && tickets.isTicketButton(interaction.customId)) {
+            return await tickets.handleButton(interaction);
+        }
+
+        if (interaction.isModalSubmit() && interaction.customId === tickets.CLOSE_FORM_ID) {
+            return await tickets.handleCloseForm(interaction, client);
         }
 
         if (interaction.isChatInputCommand() && interaction.commandName === "welcome") {
