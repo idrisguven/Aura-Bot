@@ -28,6 +28,7 @@ process.on("uncaughtException", (error) => {
 const countrySelection = require("./countryselection.js");
 const welcome = require("./welcome.js");
 const survey = require("./survey.js");
+const suggestions = require("./suggestions.js");
 
 const PLAYER_ROLE_ID = "1557353276641644634";
 const RULES_ACCEPT_BUTTON_ID = "rules_accept";
@@ -36,7 +37,7 @@ const RULES_EDIT_PREFIX = "rules_edit_";
 const EMBED_COLOR = "#7B2FF7";
 
 const client = new Client({
-    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers]
+    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessages]
 });
 
 const commands = [
@@ -463,6 +464,10 @@ client.on("interactionCreate", async interaction => {
     } catch (error) {
         console.error("Interaction error:", error);
     }
+});
+
+client.on("messageCreate", message => {
+    suggestions.handleMessage(message).catch(error => console.error("Suggestions error:", error));
 });
 
 client.on("guildMemberAdd", member => {
