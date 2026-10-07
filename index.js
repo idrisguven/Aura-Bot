@@ -27,6 +27,7 @@ process.on("uncaughtException", (error) => {
 
 const countrySelection = require("./countryselection.js");
 const welcome = require("./welcome.js");
+const survey = require("./survey.js");
 
 const PLAYER_ROLE_ID = "1557353276641644634";
 const RULES_ACCEPT_BUTTON_ID = "rules_accept";
@@ -80,6 +81,48 @@ const commands = [
                 .setDescription("Channel for join/re-join messages")
                 .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
                 .setRequired(true)
+        )
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+        .toJSON(),
+
+    new SlashCommandBuilder()
+        .setName("survey")
+        .setDescription("Create, end and check button surveys.")
+        .addSubcommand(sub =>
+            sub
+                .setName("create")
+                .setDescription("Creates a survey with button options in a channel.")
+                .addChannelOption(option =>
+                    option
+                        .setName("channel")
+                        .setDescription("Channel to post the survey in")
+                        .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
+                        .setRequired(true)
+                )
+        )
+        .addSubcommand(sub =>
+            sub
+                .setName("end")
+                .setDescription("Ends a running survey and posts the final results.")
+                .addStringOption(option =>
+                    option
+                        .setName("survey")
+                        .setDescription("The survey to end")
+                        .setAutocomplete(true)
+                        .setRequired(true)
+                )
+        )
+        .addSubcommand(sub =>
+            sub
+                .setName("results")
+                .setDescription("Shows live numbers (only to you). Leave empty to list all active surveys.")
+                .addStringOption(option =>
+                    option
+                        .setName("survey")
+                        .setDescription("The survey to inspect")
+                        .setAutocomplete(true)
+                        .setRequired(false)
+                )
         )
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
         .toJSON(),
@@ -384,6 +427,22 @@ client.on("interactionCreate", async interaction => {
 
         if (interaction.isModalSubmit() && interaction.customId.startsWith(RULES_EDIT_PREFIX)) {
             return await handleRulesEditForm(interaction);
+        }
+
+        if (interaction.isAutocomplete() && interaction.commandName === "survey") {
+            return await survey.handleAutocomplete(interaction);
+        }
+
+        if (interaction.isChatInputCommand() && interaction.commandName === "survey") {
+            return await survey.handleCommand(interaction, client);
+        }
+
+        if (interaction.isModalSubmit() && survey.isSurveyForm(interaction.customId)) {
+            return await survey.handleForm(interaction);
+        }
+
+        if (interaction.isButton() && survey.isVoteButton(interaction.customId)) {
+            return await survey.handleVote(interaction);
         }
 
         if (interaction.isChatInputCommand() && interaction.commandName === "welcome") {
