@@ -7,6 +7,7 @@ const {
     ModalBuilder,
     TextInputBuilder,
     TextInputStyle,
+    AttachmentBuilder,
     ChannelType,
     OverwriteType,
     PermissionFlagsBits,
@@ -14,6 +15,9 @@ const {
     MessageFlags
 } = require("discord.js");
 const db = require("./tickets-db.js");
+const transcript = require("./transcript.js");
+
+const TRANSCRIPT_CHANNEL_ID = "1557433146599931934";
 
 const PANEL_FORM_PREFIX = "ticket_panel_form_";
 const SELECT_ID = "ticket_select";
@@ -407,6 +411,69 @@ function scheduleDelete(channel) {
     }, DELETE_DELAY_MS);
 }
 
+const closingTickets = new Set();
+
+async function fetchUserOrId(client, userId) {
+    return client.users.fetch(userId).catch(() => ({ id: userId }));
+}
+
+/** @returns {Promise<boolean>} whether the transcript reached the log channel */
+async function postTranscript(client, interaction, ticket, category, reason, closedAt) {
+    try {
+        const guild = interaction.guild;
+        const logChannel = guild.channels.cache.get(TRANSCRIPT_CHANNEL_ID)
+            || await guild.channels.fetch(TRANSCRIPT_CHANNEL_ID).catch(() => null);
+        if (!logChannel) {
+            console.error(`Transcript channel ${TRANSCRIPT_CHANNEL_ID} not found.`);
+            return false;
+        }
+
+        const messages = await transcript.fetchAllMessages(interaction.channel);
+        const [opener, claimer] = await Promise.all([
+            fetchUserOrId(client, ticket.user_id),
+            ticket.claimed_by ? fetchUserOrId(client, ticket.claimed_by) : null
+        ]);
+
+        const text = transcript.buildTranscriptText({
+            ticket,
+            categoryLabel: category.label,
+            guildName: guild.name,
+            channelName: interaction.channel.name,
+            messages,
+            opener,
+            claimer,
+            closedBy: interaction.user,
+            closedAt,
+            reason,
+            truncated: messages.length >= transcript.MAX_MESSAGES
+        });
+
+        const file = new AttachmentBuilder(Buffer.from(text, "utf8"), {
+            name: `ticket-${ticket.id}-${interaction.channel.name}.txt`
+        });
+
+        const embed = new EmbedBuilder()
+            .setColor(CLOSED_COLOR)
+            .setTitle(`📄 Ticket #${ticket.id} closed`)
+            .addFields(
+                { name: "Category", value: `${category.emoji} ${category.label}`, inline: true },
+                { name: "Opened by", value: `<@${ticket.user_id}>`, inline: true },
+                { name: "Closed by", value: `${interaction.user}`, inline: true },
+                { name: "Claimed by", value: ticket.claimed_by ? `<@${ticket.claimed_by}>` : "Nobody", inline: true },
+                { name: "Opened", value: `<t:${Math.floor(ticket.created_at / 1000)}:f>`, inline: true },
+                { name: "Closed", value: `<t:${Math.floor(closedAt / 1000)}:f>`, inline: true },
+                { name: "Messages", value: `${messages.length}`, inline: true },
+                { name: "Reason", value: reason || "No reason provided", inline: false }
+            );
+
+        await logChannel.send({ embeds: [embed], files: [file], allowedMentions: { parse: [] } });
+        return true;
+    } catch (error) {
+        console.error(`Failed to post transcript for ticket #${ticket.id}:`, error);
+        return false;
+    }
+}
+
 async function handleCloseForm(interaction, client) {
     if (!isStaff(interaction)) {
         return interaction.reply({
@@ -423,23 +490,52 @@ async function handleCloseForm(interaction, client) {
         });
     }
 
-    const reason = interaction.fields.getTextInputValue("reason")?.trim() || null;
-    db.closeTicket(ticket.id, interaction.user.id, reason);
-    const closed = db.getTicket(ticket.id);
-    const category = CATEGORIES[closed.category];
+    if (closingTickets.has(ticket.id)) {
+        return interaction.reply({
+            content: "⏳ This ticket is already being closed.",
+            flags: MessageFlags.Ephemeral
+        });
+    }
 
-    const dmDelivered = await sendCloseDm(client, interaction, closed, category);
+    closingTickets.add(ticket.id);
+    try {
+        // Reading a long conversation can take longer than Discord's 3 seconds.
+        await interaction.deferReply();
 
-    await interaction.reply({
-        content:
-            `🔒 Ticket **#${closed.id}** closed by ${interaction.user}.` +
-            `${reason ? `\n**Reason:** ${reason}` : ""}\n` +
-            `${dmDelivered ? "The ticket owner was notified by DM." : "⚠️ I couldn't DM the ticket owner (their DMs are closed or they left)."}\n` +
-            `This channel will be deleted in ${DELETE_DELAY_MS / 1000} seconds.`,
-        allowedMentions: { parse: [] }
-    });
+        const reason = interaction.fields.getTextInputValue("reason")?.trim() || null;
+        const closedAt = Date.now();
+        const category = CATEGORIES[ticket.category];
 
-    scheduleDelete(interaction.channel);
+        // The transcript goes out BEFORE closing: if it can't be saved, the
+        // ticket stays open so the conversation is never lost.
+        const saved = await postTranscript(client, interaction, ticket, category, reason, closedAt);
+        if (!saved) {
+            return interaction.editReply({
+                content:
+                    `❌ I couldn't post the transcript to <#${TRANSCRIPT_CHANNEL_ID}>, so the ticket was **not** closed and nothing was deleted.\n` +
+                    "Check my permissions in that channel (View Channel, Send Messages, Attach Files, Embed Links) and try again."
+            });
+        }
+
+        db.closeTicket(ticket.id, interaction.user.id, reason);
+        const closed = db.getTicket(ticket.id);
+
+        const dmDelivered = await sendCloseDm(client, interaction, closed, category);
+
+        await interaction.editReply({
+            content:
+                `🔒 Ticket **#${closed.id}** closed by ${interaction.user}.` +
+                `${reason ? `\n**Reason:** ${reason}` : ""}\n` +
+                `📄 Transcript saved in <#${TRANSCRIPT_CHANNEL_ID}>.\n` +
+                `${dmDelivered ? "The ticket owner was notified by DM." : "⚠️ I couldn't DM the ticket owner (their DMs are closed or they left)."}\n` +
+                `This channel will be deleted in ${DELETE_DELAY_MS / 1000} seconds.`,
+            allowedMentions: { parse: [] }
+        });
+
+        scheduleDelete(interaction.channel);
+    } finally {
+        closingTickets.delete(ticket.id);
+    }
 }
 
 async function sendCloseDm(client, interaction, ticket, category) {
