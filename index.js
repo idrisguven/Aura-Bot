@@ -26,6 +26,7 @@ process.on("uncaughtException", (error) => {
 });
 
 const countrySelection = require("./countryselection.js");
+const welcome = require("./welcome.js");
 
 const PLAYER_ROLE_ID = "1557353276641644634";
 const RULES_ACCEPT_BUTTON_ID = "rules_accept";
@@ -34,7 +35,7 @@ const RULES_EDIT_PREFIX = "rules_edit_";
 const EMBED_COLOR = "#7B2FF7";
 
 const client = new Client({
-    intents: [GatewayIntentBits.Guilds]
+    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers]
 });
 
 const commands = [
@@ -71,6 +72,19 @@ const commands = [
         .toJSON(),
 
     new SlashCommandBuilder()
+        .setName("welcome")
+        .setDescription("Sets the channel where join and re-join messages are posted.")
+        .addChannelOption(option =>
+            option
+                .setName("channel")
+                .setDescription("Channel for join/re-join messages")
+                .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
+                .setRequired(true)
+        )
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+        .toJSON(),
+
+    new SlashCommandBuilder()
         .setName("countryselection")
         .setDescription("Posts the language selection panel (flag buttons that give language roles).")
         .addChannelOption(option =>
@@ -86,6 +100,10 @@ const commands = [
 
 client.once("clientReady", async () => {
     console.log(`Bot online: ${client.user.tag}`);
+
+    for (const guild of client.guilds.cache.values()) {
+        welcome.seedExistingMembers(guild);
+    }
 
     if (!process.env.GUILD_ID) {
         console.error("GUILD_ID is not set in .env. Slash commands were not registered.");
@@ -368,6 +386,10 @@ client.on("interactionCreate", async interaction => {
             return await handleRulesEditForm(interaction);
         }
 
+        if (interaction.isChatInputCommand() && interaction.commandName === "welcome") {
+            return await welcome.handleCommand(interaction, client);
+        }
+
         if (interaction.isChatInputCommand() && interaction.commandName === "countryselection") {
             return await countrySelection.handleCommand(interaction, client);
         }
@@ -382,6 +404,10 @@ client.on("interactionCreate", async interaction => {
     } catch (error) {
         console.error("Interaction error:", error);
     }
+});
+
+client.on("guildMemberAdd", member => {
+    welcome.handleMemberAdd(member).catch(error => console.error("Join message error:", error));
 });
 
 client.login(process.env.DISCORD_TOKEN);
