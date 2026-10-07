@@ -1,0 +1,11 @@
+node_modules/
+.env
+
+# Veritabanı: sunucuda oluşup büyüyen, kişiye özel veri içeren dosya.
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+npm-debug.log*
+.DS_Store
