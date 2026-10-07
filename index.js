@@ -25,6 +25,8 @@ process.on("uncaughtException", (error) => {
     console.error("Uncaught exception:", error);
 });
 
+const countrySelection = require("./countryselection.js");
+
 const PLAYER_ROLE_ID = "1557353276641644634";
 const RULES_ACCEPT_BUTTON_ID = "rules_accept";
 const RULES_FORM_PREFIX = "rules_form_";
@@ -64,6 +66,19 @@ const commands = [
                 .setDescription("Only needed if you gave a message ID instead of a link")
                 .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
                 .setRequired(false)
+        )
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+        .toJSON(),
+
+    new SlashCommandBuilder()
+        .setName("countryselection")
+        .setDescription("Posts the language selection panel (flag buttons that give language roles).")
+        .addChannelOption(option =>
+            option
+                .setName("channel")
+                .setDescription("Channel to post the language selection in")
+                .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
+                .setRequired(true)
         )
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
         .toJSON()
@@ -351,6 +366,14 @@ client.on("interactionCreate", async interaction => {
 
         if (interaction.isModalSubmit() && interaction.customId.startsWith(RULES_EDIT_PREFIX)) {
             return await handleRulesEditForm(interaction);
+        }
+
+        if (interaction.isChatInputCommand() && interaction.commandName === "countryselection") {
+            return await countrySelection.handleCommand(interaction, client);
+        }
+
+        if (interaction.isButton() && countrySelection.isCountryButton(interaction.customId)) {
+            return await countrySelection.handleButton(interaction);
         }
 
         if (interaction.isButton() && interaction.customId === RULES_ACCEPT_BUTTON_ID) {
