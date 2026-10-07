@@ -29,6 +29,7 @@ const countrySelection = require("./countryselection.js");
 const welcome = require("./welcome.js");
 const survey = require("./survey.js");
 const suggestions = require("./suggestions.js");
+const quitLog = require("./quitlog.js");
 
 const PLAYER_ROLE_ID = "1557353276641644634";
 const RULES_ACCEPT_BUTTON_ID = "rules_accept";
@@ -468,6 +469,10 @@ client.on("interactionCreate", async interaction => {
 
 client.on("messageCreate", message => {
     suggestions.handleMessage(message).catch(error => console.error("Suggestions error:", error));
+});
+
+client.on("guildMemberRemove", member => {
+    quitLog.handleMemberRemove(member).catch(error => console.error("Quit log error:", error));
 });
 
 client.on("guildMemberAdd", member => {
