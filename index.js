@@ -32,6 +32,8 @@ const suggestions = require("./suggestions.js");
 const quitLog = require("./quitlog.js");
 const tickets = require("./tickets.js");
 const automod = require("./automod.js");
+const massDm = require("./massdm.js");
+const bulkdm = require("./bulkdm.js");
 const { createAcceptPanel, RULES_PANEL_CONFIG, MARKETPLACE_PANEL_CONFIG } = require("./acceptpanel.js");
 
 const client = new Client({
@@ -42,6 +44,8 @@ const rulesPanel = createAcceptPanel(RULES_PANEL_CONFIG, client);
 const marketplacePanel = createAcceptPanel(MARKETPLACE_PANEL_CONFIG, client);
 
 const commands = [
+    massDm.command,
+
     ...rulesPanel.commands,
     ...marketplacePanel.commands,
 
@@ -134,6 +138,11 @@ client.once("clientReady", async () => {
         welcome.seedExistingMembers(guild);
     }
 
+    // Continue any mass DM the previous run left unfinished.
+    bulkdm.resumeUnfinishedJobs(client).catch(error => {
+        console.error("Could not resume unfinished mass DM jobs:", error);
+    });
+
     if (!process.env.GUILD_ID) {
         console.error("GUILD_ID is not set in .env. Slash commands were not registered.");
         return;
@@ -153,6 +162,10 @@ client.once("clientReady", async () => {
 
 client.on("interactionCreate", async interaction => {
     try {
+        if (massDm.isMassDmInteraction(interaction)) {
+            return await massDm.handle(interaction, client);
+        }
+
         if (await rulesPanel.handle(interaction) || await marketplacePanel.handle(interaction)) return;
 
         if (interaction.isAutocomplete() && interaction.commandName === "survey") {
