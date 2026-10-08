@@ -564,7 +564,10 @@ async function sendCloseDm(client, interaction, ticket, category) {
     }
 }
 
+const TICKET_CATEGORY_IDS = new Set(Object.values(CATEGORIES).map(category => category.parentId));
+
 module.exports = {
+    TICKET_CATEGORY_IDS,
     SELECT_ID,
     CLOSE_FORM_ID,
     isTicketButton,

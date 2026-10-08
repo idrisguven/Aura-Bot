@@ -31,10 +31,11 @@ const survey = require("./survey.js");
 const suggestions = require("./suggestions.js");
 const quitLog = require("./quitlog.js");
 const tickets = require("./tickets.js");
+const automod = require("./automod.js");
 const { createAcceptPanel, RULES_PANEL_CONFIG, MARKETPLACE_PANEL_CONFIG } = require("./acceptpanel.js");
 
 const client = new Client({
-    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessages]
+    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent]
 });
 
 const rulesPanel = createAcceptPanel(RULES_PANEL_CONFIG, client);
@@ -207,8 +208,19 @@ client.on("interactionCreate", async interaction => {
     }
 });
 
-client.on("messageCreate", message => {
-    suggestions.handleMessage(message).catch(error => console.error("Suggestions error:", error));
+client.on("messageCreate", async message => {
+    try {
+        // A removed message must not get the suggestion reactions.
+        if (await automod.handleMessage(message)) return;
+        await suggestions.handleMessage(message);
+    } catch (error) {
+        console.error("Message handler error:", error);
+    }
+});
+
+// Someone could post a clean message and edit the bad words in afterwards.
+client.on("messageUpdate", (oldMessage, newMessage) => {
+    automod.handleMessage(newMessage).catch(error => console.error("Automod (edit) error:", error));
 });
 
 client.on("guildMemberRemove", member => {
