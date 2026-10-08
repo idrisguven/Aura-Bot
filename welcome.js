@@ -1,5 +1,6 @@
 const { PermissionFlagsBits, MessageFlags } = require("discord.js");
 const db = require("./welcome-db.js");
+const { ensureAllMembers } = require("./members.js");
 
 /**
  * Records everyone currently in the server as "already seen", so that if
@@ -8,7 +9,7 @@ const db = require("./welcome-db.js");
  */
 async function seedExistingMembers(guild) {
     try {
-        const members = await guild.members.fetch();
+        const members = await ensureAllMembers(guild);
         db.markManySeen(guild.id, members.filter(m => !m.user.bot).map(m => m.id));
     } catch (error) {
         console.error(`Failed to record existing members for guild ${guild.id}:`, error.message);

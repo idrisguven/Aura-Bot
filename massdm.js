@@ -10,6 +10,7 @@ const {
     MessageFlags
 } = require("discord.js");
 const bulkdm = require("./bulkdm.js");
+const { ensureAllMembers } = require("./members.js");
 
 const FORM_ID = "massdm_form";
 const CONFIRM_ID = "massdm_confirm";
@@ -116,11 +117,12 @@ async function handleForm(interaction) {
         });
     }
 
-    // Members are fetched ONCE here and kept in the cache; the confirm step
-    // must not call fetch() again (Discord rate limits that gateway request).
+    // Members are loaded here and kept in the cache; the confirm step must not
+    // load them again. ensureAllMembers() skips the request when the list is
+    // already complete and waits out Discord's rate limit when it isn't.
     let members;
     try {
-        members = await interaction.guild.members.fetch();
+        members = await ensureAllMembers(interaction.guild);
     } catch (error) {
         console.error("Failed to fetch the member list:", error);
         return interaction.editReply({
