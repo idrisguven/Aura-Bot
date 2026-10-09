@@ -34,6 +34,7 @@ const tickets = require("./tickets.js");
 const automod = require("./automod.js");
 const massDm = require("./massdm.js");
 const promoter = require("./promoter.js");
+const promoterLog = require("./promoterlog.js");
 const bulkdm = require("./bulkdm.js");
 const { createAcceptPanel, RULES_PANEL_CONFIG, MARKETPLACE_PANEL_CONFIG } = require("./acceptpanel.js");
 
@@ -47,6 +48,7 @@ const marketplacePanel = createAcceptPanel(MARKETPLACE_PANEL_CONFIG, client);
 const commands = [
     massDm.command,
     ...promoter.commands,
+    ...promoterLog.commands,
 
     ...rulesPanel.commands,
     ...marketplacePanel.commands,
@@ -140,6 +142,9 @@ client.once("clientReady", async () => {
         welcome.seedExistingMembers(guild);
     }
 
+    // Daily promoter log.
+    promoterLog.start(client);
+
     // Continue any mass DM the previous run left unfinished.
     bulkdm.resumeUnfinishedJobs(client).catch(error => {
         console.error("Could not resume unfinished mass DM jobs:", error);
@@ -184,6 +189,18 @@ client.on("interactionCreate", async interaction => {
 
         if (interaction.isButton() && survey.isVoteButton(interaction.customId)) {
             return await survey.handleVote(interaction);
+        }
+
+        if (interaction.isChatInputCommand() && interaction.commandName === "promoterlog") {
+            return await promoterLog.handleCommand(interaction);
+        }
+
+        if (interaction.isChatInputCommand() && interaction.commandName === "promoterlog-backfill") {
+            return await promoterLog.handleBackfillCommand(interaction);
+        }
+
+        if (interaction.isButton() && promoterLog.isPageButton(interaction.customId)) {
+            return await promoterLog.handlePageButton(interaction);
         }
 
         if (interaction.isChatInputCommand() && interaction.commandName === "promoter") {
@@ -243,6 +260,7 @@ client.on("messageCreate", async message => {
     try {
         // A removed message must not get the suggestion reactions.
         if (await automod.handleMessage(message)) return;
+        promoterLog.handleMessage(message);
         await suggestions.handleMessage(message);
     } catch (error) {
         console.error("Message handler error:", error);

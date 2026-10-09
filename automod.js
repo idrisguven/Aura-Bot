@@ -6,6 +6,7 @@
 
 const { PermissionFlagsBits } = require("discord.js");
 const { isTicketChannel } = require("./tickets.js");
+const { isTrackedChannel } = require("./promoterlog.js");
 
 // ---------- word list ----------
 
@@ -220,9 +221,10 @@ function isStaff(message) {
     );
 }
 
-function findViolation(content) {
+function findViolation(content, channelId) {
     if (containsProfanity(content)) return "profanity";
-    if (containsAdvertising(content)) return "advertising";
+    // Promoters share their videos and streams as links in their own channels.
+    if (!isTrackedChannel(channelId) && containsAdvertising(content)) return "advertising";
     return null;
 }
 
@@ -247,7 +249,7 @@ async function handleMessage(message) {
     if (!message.content) return false;
     if (isStaff(message)) return false;
 
-    const violation = findViolation(message.content);
+    const violation = findViolation(message.content, message.channel.id);
     if (!violation) return false;
 
     // Open tickets are private and people need to paste links and chat logs
