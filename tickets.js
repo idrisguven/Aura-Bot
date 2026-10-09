@@ -28,6 +28,9 @@ const EMBED_COLOR = "#7B2FF7";
 const CLOSED_COLOR = "#ED4245";
 const DELETE_DELAY_MS = 5000;
 
+// The Discord category promotion application tickets are created in.
+const PROMOTER_CATEGORY_ID = "1558173074568912986";
+
 // parentId = the Discord category (folder) the ticket channel is created in.
 const CATEGORIES = {
     general: {
@@ -53,7 +56,7 @@ const CATEGORIES = {
         label: "Promotion Application",
         emoji: "🎥",
         description: "Apply to become a promoter",
-        parentId: "1557430773353680938",
+        parentId: PROMOTER_CATEGORY_ID,
         inPanel: false,
         intro: "Please include links to your channel(s), the platform(s) you use, and your average viewership or follower count."
     }
@@ -619,6 +622,7 @@ async function sendCloseDm(client, interaction, ticket, category) {
 }
 
 module.exports = {
+    PROMOTER_CATEGORY_ID,
     DEFAULT_CLOSED_NOTICE,
     PROMOTER_BUTTON_PREFIX,
     PROMOTER_BUTTON_ID,

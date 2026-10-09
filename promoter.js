@@ -18,7 +18,7 @@ const FORM_PREFIX = "promoter_form_";
 const DEFAULT_TITLE = "Promoter Applications";
 const DEFAULT_BUTTON_LABEL = "Promoter";
 const EMBED_COLOR = "#7B2FF7";
-const PROMOTER_CATEGORY_ID = "1557430773353680938";
+const { PROMOTER_CATEGORY_ID } = tickets;
 
 const command = new SlashCommandBuilder()
     .setName("promoter")
