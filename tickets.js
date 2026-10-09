@@ -48,18 +48,20 @@ const CATEGORIES = {
         description: "Report a hacker or a compromised account",
         parentId: "1557430746325581916"
     },
-    // No fixed category: the /promoter announcement button carries its own
-    // (chosen when the announcement is posted). Not offered in the panel menu.
+    // Opened from the /promoter announcement button, not from the panel menu.
     promoter: {
-        label: "Promoter Application",
+        label: "Promotion Application",
         emoji: "🎥",
         description: "Apply to become a promoter",
-        parentId: null,
+        parentId: "1557430773353680938",
+        inPanel: false,
         intro: "Please include links to your channel(s), the platform(s) you use, and your average viewership or follower count."
     }
 };
 
+// Old announcements carry a category id after the prefix; it is ignored now.
 const PROMOTER_BUTTON_PREFIX = "ticket_promoter_";
+const PROMOTER_BUTTON_ID = `${PROMOTER_BUTTON_PREFIX}apply`;
 
 function isStaff(interaction) {
     const permissions = interaction.memberPermissions;
@@ -95,7 +97,7 @@ function buildPanelRow() {
             .setCustomId(SELECT_ID)
             .setPlaceholder("Select a ticket type...")
             .addOptions(
-                Object.entries(CATEGORIES).filter(([, category]) => category.parentId).map(([key, category]) => ({
+                Object.entries(CATEGORIES).filter(([, category]) => category.inPanel !== false).map(([key, category]) => ({
                     label: category.label,
                     value: key,
                     description: category.description,
@@ -285,8 +287,8 @@ async function handleSelect(interaction, client) {
     // menu back lets people pick the same type again later.
     interaction.message.edit({ components: [buildPanelRow()] }).catch(() => {});
 
-    // Types without a fixed category (promoter) can only be opened from their own button.
-    if (!category || !category.parentId) {
+    // Types that aren't in the panel (promoter) can only be opened from their own button.
+    if (!category || category.inPanel === false) {
         return interaction.reply({
             content: "❌ That ticket type is no longer available.",
             flags: MessageFlags.Ephemeral
@@ -301,12 +303,28 @@ function isPromoterButton(customId) {
     return customId.startsWith(PROMOTER_BUTTON_PREFIX);
 }
 
-/** Button on a /promoter announcement: opens a promoter application ticket. */
+const DEFAULT_CLOSED_NOTICE =
+    "❗ Promoter applications are currently closed — our hobbyist promoter roster is full until further notice. " +
+    "We will announce when there is space available again.\n" +
+    "If you are a professional with a very large audience, please contact the team and we will get in touch with you.\n" +
+    "Thank you for understanding.";
+
+/**
+ * Button on a /promoter announcement: opens a promotion application ticket,
+ * or shows the "applications are closed" notice (visible only to the person
+ * who clicked) while an administrator has applications closed.
+ */
 async function handlePromoterButton(interaction, client) {
-    const parentId = interaction.customId.slice(PROMOTER_BUTTON_PREFIX.length);
+    const settings = db.getPromoterSettings(interaction.guild.id);
+    if (settings.closed) {
+        return interaction.reply({
+            content: settings.message || DEFAULT_CLOSED_NOTICE,
+            flags: MessageFlags.Ephemeral
+        });
+    }
 
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    return openTicket(interaction, client, "promoter", parentId);
+    return openTicket(interaction, client, "promoter", CATEGORIES.promoter.parentId);
 }
 
 /** Creates the private ticket channel. The reply must already be deferred. */
@@ -601,7 +619,9 @@ async function sendCloseDm(client, interaction, ticket, category) {
 }
 
 module.exports = {
+    DEFAULT_CLOSED_NOTICE,
     PROMOTER_BUTTON_PREFIX,
+    PROMOTER_BUTTON_ID,
     isTicketChannel,
     isPromoterButton,
     handlePromoterButton,

@@ -46,7 +46,7 @@ const marketplacePanel = createAcceptPanel(MARKETPLACE_PANEL_CONFIG, client);
 
 const commands = [
     massDm.command,
-    promoter.command,
+    ...promoter.commands,
 
     ...rulesPanel.commands,
     ...marketplacePanel.commands,
@@ -190,8 +190,12 @@ client.on("interactionCreate", async interaction => {
             return await promoter.handleCommand(interaction, client);
         }
 
+        if (interaction.isChatInputCommand() && interaction.commandName === "promoter-applications") {
+            return await promoter.handleStatusCommand(interaction);
+        }
+
         if (interaction.isModalSubmit() && promoter.isForm(interaction.customId)) {
-            return await promoter.handleForm(interaction);
+            return await promoter.handleForm(interaction, client);
         }
 
         if (interaction.isButton() && tickets.isPromoterButton(interaction.customId)) {

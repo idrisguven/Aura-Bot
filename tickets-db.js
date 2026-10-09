@@ -18,6 +18,12 @@ db.exec(`
         close_reason TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS promoter_settings (
+        guild_id TEXT PRIMARY KEY,
+        closed INTEGER NOT NULL DEFAULT 0,
+        closed_message TEXT
+    );
+
     CREATE INDEX IF NOT EXISTS idx_tickets_channel ON tickets (channel_id);
     CREATE INDEX IF NOT EXISTS idx_tickets_user_open ON tickets (guild_id, user_id, category, status);
 `);
@@ -68,7 +74,21 @@ function closeTicket(ticketId, closedBy, reason) {
     `).run(Date.now(), closedBy, reason || null, ticketId);
 }
 
+function getPromoterSettings(guildId) {
+    const row = db.prepare("SELECT closed, closed_message FROM promoter_settings WHERE guild_id = ?").get(guildId);
+    return { closed: Boolean(row?.closed), message: row?.closed_message ?? null };
+}
+
+function setPromoterClosed(guildId, closed, message) {
+    db.prepare(`
+        INSERT INTO promoter_settings (guild_id, closed, closed_message) VALUES (?, ?, ?)
+        ON CONFLICT(guild_id) DO UPDATE SET closed = excluded.closed, closed_message = excluded.closed_message
+    `).run(guildId, closed ? 1 : 0, message || null);
+}
+
 module.exports = {
+    getPromoterSettings,
+    setPromoterClosed,
     createTicket,
     setChannelId,
     deleteTicket,
