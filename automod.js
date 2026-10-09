@@ -5,7 +5,7 @@
 // (nothing is posted in the channel). Staff and ticket channels are exempt.
 
 const { PermissionFlagsBits } = require("discord.js");
-const { TICKET_CATEGORY_IDS } = require("./tickets.js");
+const { isTicketChannel } = require("./tickets.js");
 
 // ---------- word list ----------
 
@@ -211,18 +211,13 @@ const WARNINGS = {
     advertising: "🚫 **Advertising is not allowed** on this server (Discord invites and links to other sites)."
 };
 
-function isExempt(message) {
+function isStaff(message) {
     const permissions = message.member?.permissions;
-    if (
+    return Boolean(
         permissions?.has(PermissionFlagsBits.Administrator) ||
         permissions?.has(PermissionFlagsBits.ManageMessages) ||
         permissions?.has(PermissionFlagsBits.ManageGuild)
-    ) {
-        return true;
-    }
-
-    const parentId = message.channel?.parentId;
-    return Boolean(parentId && TICKET_CATEGORY_IDS.has(parentId));
+    );
 }
 
 function findViolation(content) {
@@ -250,10 +245,14 @@ async function warnPrivately(message, violation) {
 async function handleMessage(message) {
     if (message.partial || !message.guild || !message.author || message.author.bot || message.system) return false;
     if (!message.content) return false;
-    if (isExempt(message)) return false;
+    if (isStaff(message)) return false;
 
     const violation = findViolation(message.content);
     if (!violation) return false;
+
+    // Open tickets are private and people need to paste links and chat logs
+    // there. Checked only after a hit, so normal messages never touch the database.
+    if (isTicketChannel(message.channel.id)) return false;
 
     try {
         await message.delete();

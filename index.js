@@ -33,6 +33,7 @@ const quitLog = require("./quitlog.js");
 const tickets = require("./tickets.js");
 const automod = require("./automod.js");
 const massDm = require("./massdm.js");
+const promoter = require("./promoter.js");
 const bulkdm = require("./bulkdm.js");
 const { createAcceptPanel, RULES_PANEL_CONFIG, MARKETPLACE_PANEL_CONFIG } = require("./acceptpanel.js");
 
@@ -45,6 +46,7 @@ const marketplacePanel = createAcceptPanel(MARKETPLACE_PANEL_CONFIG, client);
 
 const commands = [
     massDm.command,
+    promoter.command,
 
     ...rulesPanel.commands,
     ...marketplacePanel.commands,
@@ -182,6 +184,18 @@ client.on("interactionCreate", async interaction => {
 
         if (interaction.isButton() && survey.isVoteButton(interaction.customId)) {
             return await survey.handleVote(interaction);
+        }
+
+        if (interaction.isChatInputCommand() && interaction.commandName === "promoter") {
+            return await promoter.handleCommand(interaction, client);
+        }
+
+        if (interaction.isModalSubmit() && promoter.isForm(interaction.customId)) {
+            return await promoter.handleForm(interaction);
+        }
+
+        if (interaction.isButton() && tickets.isPromoterButton(interaction.customId)) {
+            return await tickets.handlePromoterButton(interaction, client);
         }
 
         if (interaction.isChatInputCommand() && interaction.commandName === "ticket-panel") {

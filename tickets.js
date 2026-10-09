@@ -47,8 +47,19 @@ const CATEGORIES = {
         emoji: "🚨",
         description: "Report a hacker or a compromised account",
         parentId: "1557430746325581916"
+    },
+    // No fixed category: the /promoter announcement button carries its own
+    // (chosen when the announcement is posted). Not offered in the panel menu.
+    promoter: {
+        label: "Promoter Application",
+        emoji: "🎥",
+        description: "Apply to become a promoter",
+        parentId: null,
+        intro: "Please include links to your channel(s), the platform(s) you use, and your average viewership or follower count."
     }
 };
+
+const PROMOTER_BUTTON_PREFIX = "ticket_promoter_";
 
 function isStaff(interaction) {
     const permissions = interaction.memberPermissions;
@@ -84,7 +95,7 @@ function buildPanelRow() {
             .setCustomId(SELECT_ID)
             .setPlaceholder("Select a ticket type...")
             .addOptions(
-                Object.entries(CATEGORIES).map(([key, category]) => ({
+                Object.entries(CATEGORIES).filter(([, category]) => category.parentId).map(([key, category]) => ({
                     label: category.label,
                     value: key,
                     description: category.description,
@@ -100,7 +111,9 @@ function buildTicketEmbed(ticket) {
         .setColor(EMBED_COLOR)
         .setTitle(`🎫 Ticket #${ticket.id} — ${category.label}`)
         .setDescription(
-            `Hello <@${ticket.user_id}>, please describe your issue below.\n` +
+            (category.intro
+                ? `Hello <@${ticket.user_id}>, thanks for your interest!\n${category.intro}\n`
+                : `Hello <@${ticket.user_id}>, please describe your issue below.\n`) +
             "You can send messages, links and images. A staff member will be with you shortly."
         )
         .addFields(
@@ -272,7 +285,8 @@ async function handleSelect(interaction, client) {
     // menu back lets people pick the same type again later.
     interaction.message.edit({ components: [buildPanelRow()] }).catch(() => {});
 
-    if (!category) {
+    // Types without a fixed category (promoter) can only be opened from their own button.
+    if (!category || !category.parentId) {
         return interaction.reply({
             content: "❌ That ticket type is no longer available.",
             flags: MessageFlags.Ephemeral
@@ -280,7 +294,24 @@ async function handleSelect(interaction, client) {
     }
 
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    return openTicket(interaction, client, key, category.parentId);
+}
 
+function isPromoterButton(customId) {
+    return customId.startsWith(PROMOTER_BUTTON_PREFIX);
+}
+
+/** Button on a /promoter announcement: opens a promoter application ticket. */
+async function handlePromoterButton(interaction, client) {
+    const parentId = interaction.customId.slice(PROMOTER_BUTTON_PREFIX.length);
+
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    return openTicket(interaction, client, "promoter", parentId);
+}
+
+/** Creates the private ticket channel. The reply must already be deferred. */
+async function openTicket(interaction, client, key, parentId) {
+    const category = CATEGORIES[key];
     const guild = interaction.guild;
     const member = interaction.member;
 
@@ -293,10 +324,10 @@ async function handleSelect(interaction, client) {
         });
     }
 
-    const parent = guild.channels.cache.get(category.parentId)
-        || await guild.channels.fetch(category.parentId).catch(() => null);
+    const parent = guild.channels.cache.get(parentId)
+        || await guild.channels.fetch(parentId).catch(() => null);
     if (!parent || parent.type !== ChannelType.GuildCategory) {
-        console.error(`Ticket category ${category.parentId} (${category.label}) not found or not a category.`);
+        console.error(`Ticket category ${parentId} (${category.label}) not found or not a category.`);
         return interaction.editReply({
             content: "❌ This ticket type is not set up correctly. Please contact an administrator."
         });
@@ -333,6 +364,11 @@ async function handleSelect(interaction, client) {
             content: "❌ I couldn't create your ticket. Please try again or contact an administrator."
         });
     }
+}
+
+/** True if this channel is an open ticket (the filter leaves tickets alone). */
+function isTicketChannel(channelId) {
+    return db.getTicketByChannel(channelId)?.status === "open";
 }
 
 // ---------- inside a ticket ----------
@@ -564,10 +600,11 @@ async function sendCloseDm(client, interaction, ticket, category) {
     }
 }
 
-const TICKET_CATEGORY_IDS = new Set(Object.values(CATEGORIES).map(category => category.parentId));
-
 module.exports = {
-    TICKET_CATEGORY_IDS,
+    PROMOTER_BUTTON_PREFIX,
+    isTicketChannel,
+    isPromoterButton,
+    handlePromoterButton,
     SELECT_ID,
     CLOSE_FORM_ID,
     isTicketButton,
