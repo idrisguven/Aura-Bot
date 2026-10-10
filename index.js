@@ -211,6 +211,10 @@ client.on("interactionCreate", async interaction => {
             return await tickets.handleApplicationButton(interaction, client);
         }
 
+        if (interaction.isStringSelectMenu() && tickets.isApplicationSelect(interaction.customId)) {
+            return await tickets.handleApplicationSelect(interaction, client);
+        }
+
         if (interaction.isChatInputCommand() && interaction.commandName === "ticket-panel") {
             return await tickets.handlePanelCommand(interaction, client);
         }

@@ -79,6 +79,7 @@ const CATEGORIES = {
 const APPLICATIONS = {
     promoter: {
         buttonId: "ticket_promoter_apply",
+        selectId: "ticket_promoter_select",
         prefix: "ticket_promoter_",
         defaultClosedNotice:
             "❗ Promoter applications are currently closed — our hobbyist promoter roster is full until further notice. " +
@@ -88,6 +89,7 @@ const APPLICATIONS = {
     },
     team: {
         buttonId: "ticket_team_apply",
+        selectId: "ticket_team_select",
         prefix: "ticket_team_",
         defaultClosedNotice:
             "❗ Team applications are currently closed. We will announce when we start accepting applications again.\n" +
@@ -339,13 +341,38 @@ function isApplicationButton(customId) {
     return applicationKind(customId) !== undefined;
 }
 
+const DEFAULT_APPLICATION_MENU_TEXT = "Create application.";
+
+/** The one-option dropdown used by announcements that look like a panel (instead of a button). */
+function buildApplicationSelectRow(kind, placeholder) {
+    const category = CATEGORIES[kind];
+    return new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+            .setCustomId(APPLICATIONS[kind].selectId)
+            .setPlaceholder(placeholder || DEFAULT_APPLICATION_MENU_TEXT)
+            .addOptions({
+                label: category.label,
+                value: kind,
+                description: category.description,
+                emoji: category.emoji
+            })
+    );
+}
+
+function applicationKindForSelect(customId) {
+    return Object.keys(APPLICATIONS).find(kind => APPLICATIONS[kind].selectId === customId);
+}
+
+function isApplicationSelect(customId) {
+    return applicationKindForSelect(customId) !== undefined;
+}
+
 /**
- * Button on an application announcement: opens that kind of application
- * ticket, or shows the "applications are closed" notice (visible only to the
- * person who clicked) while an administrator has applications closed.
+ * Opens that kind of application ticket, or shows the "applications are
+ * closed" notice (visible only to the person who clicked) while an
+ * administrator has applications closed.
  */
-async function handleApplicationButton(interaction, client) {
-    const kind = applicationKind(interaction.customId);
+async function startApplication(interaction, client, kind) {
     const settings = db.getApplicationSettings(interaction.guild.id, kind);
 
     if (settings.closed) {
@@ -357,6 +384,27 @@ async function handleApplicationButton(interaction, client) {
 
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     return openTicket(interaction, client, kind, CATEGORIES[kind].parentId);
+}
+
+/** Dropdown on an application announcement. */
+async function handleApplicationSelect(interaction, client) {
+    const kind = applicationKindForSelect(interaction.customId);
+
+    // A chosen option stays highlighted; put a fresh menu back so it can be used again.
+    interaction.message.edit({
+        components: [buildApplicationSelectRow(kind, interaction.component?.placeholder)]
+    }).catch(() => {});
+
+    return startApplication(interaction, client, kind);
+}
+
+/**
+ * Button on an application announcement: opens that kind of application
+ * ticket, or shows the "applications are closed" notice (visible only to the
+ * person who clicked) while an administrator has applications closed.
+ */
+async function handleApplicationButton(interaction, client) {
+    return startApplication(interaction, client, applicationKind(interaction.customId));
 }
 
 /** Creates the private ticket channel. The reply must already be deferred. */
@@ -656,6 +704,9 @@ module.exports = {
     isTicketChannel,
     isApplicationButton,
     handleApplicationButton,
+    isApplicationSelect,
+    handleApplicationSelect,
+    buildApplicationSelectRow,
     SELECT_ID,
     CLOSE_FORM_ID,
     isTicketButton,

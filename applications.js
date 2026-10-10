@@ -20,6 +20,7 @@ const {
 } = require("discord.js");
 const tickets = require("./tickets.js");
 const ticketsDb = require("./tickets-db.js");
+const { formatTags } = require("./format.js");
 
 const EMBED_COLOR = "#7B2FF7";
 
@@ -46,10 +47,13 @@ function isAdmin(interaction) {
  *   displayName,               // "Promoter", "Team"
  *   commandName, statusCommandName, formPrefix,
  *   commandDescription, statusDescription,
- *   modalTitle, defaultTitle, defaultButtonLabel, buttonEmoji, messagePlaceholder
+ *   modalTitle, defaultTitle, defaultButtonLabel, buttonEmoji, messagePlaceholder,
+ *   component,                 // "button" (default) or "select" (a dropdown, like a panel)
+ *   messageTemplate            // optional text the message box starts with
  * }
  */
 function createApplicationFeature(config) {
+    const useSelect = config.component === "select";
     const application = tickets.APPLICATIONS[config.kind];
     const ticketCategory = tickets.CATEGORIES[config.kind];
 
@@ -116,11 +120,12 @@ function createApplicationFeature(config) {
 
         const messageInput = new TextInputBuilder()
             .setCustomId("message")
-            .setLabel("Message")
+            .setLabel(config.messageTemplate ? "Message (edit the ready-made text)" : "Message")
             .setStyle(TextInputStyle.Paragraph)
             .setPlaceholder(config.messagePlaceholder)
             .setMaxLength(4000)
             .setRequired(true);
+        if (config.messageTemplate) messageInput.setValue(config.messageTemplate);
 
         const imageInput = new TextInputBuilder()
             .setCustomId("image")
@@ -132,7 +137,7 @@ function createApplicationFeature(config) {
 
         const buttonInput = new TextInputBuilder()
             .setCustomId("button")
-            .setLabel("Button text (optional)")
+            .setLabel(useSelect ? "Dropdown text (optional)" : "Button text (optional)")
             .setStyle(TextInputStyle.Short)
             .setPlaceholder(config.defaultButtonLabel)
             .setMaxLength(80)
@@ -151,7 +156,7 @@ function createApplicationFeature(config) {
     async function handleForm(interaction, client) {
         const channelId = interaction.customId.slice(config.formPrefix.length);
         const title = interaction.fields.getTextInputValue("title").trim() || config.defaultTitle;
-        const message = interaction.fields.getTextInputValue("message");
+        const message = formatTags(interaction.fields.getTextInputValue("message"));
         const image = interaction.fields.getTextInputValue("image").trim();
         const buttonLabel = interaction.fields.getTextInputValue("button").trim() || config.defaultButtonLabel;
 
@@ -181,13 +186,15 @@ function createApplicationFeature(config) {
             .setDescription(message);
         if (image) embed.setImage(image);
 
-        const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId(application.buttonId)
-                .setLabel(buttonLabel)
-                .setEmoji(config.buttonEmoji)
-                .setStyle(ButtonStyle.Secondary)
-        );
+        const row = useSelect
+            ? tickets.buildApplicationSelectRow(config.kind, buttonLabel)
+            : new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId(application.buttonId)
+                    .setLabel(buttonLabel)
+                    .setEmoji(config.buttonEmoji)
+                    .setStyle(ButtonStyle.Secondary)
+            );
 
         try {
             await channel.send({ embeds: [embed], components: [row] });
