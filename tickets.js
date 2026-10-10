@@ -16,6 +16,7 @@ const {
 } = require("discord.js");
 const db = require("./tickets-db.js");
 const transcript = require("./transcript.js");
+const { formatTags } = require("./format.js");
 
 const TRANSCRIPT_CHANNEL_ID = "1557433146599931934";
 
@@ -302,7 +303,7 @@ async function handlePanelCommand(interaction, client) {
 async function handlePanelForm(interaction) {
     const channelId = interaction.customId.slice(PANEL_FORM_PREFIX.length);
     const title = interaction.fields.getTextInputValue("title")?.trim() || "Support Tickets";
-    const message = interaction.fields.getTextInputValue("message");
+    const message = formatTags(interaction.fields.getTextInputValue("message"));
 
     const channel = interaction.guild.channels.cache.get(channelId)
         || await interaction.guild.channels.fetch(channelId).catch(() => null);
