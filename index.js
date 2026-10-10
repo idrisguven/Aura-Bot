@@ -34,6 +34,7 @@ const tickets = require("./tickets.js");
 const automod = require("./automod.js");
 const massDm = require("./massdm.js");
 const promoter = require("./promoter.js");
+const teamApplication = require("./teamapplication.js");
 const promoterLog = require("./promoterlog.js");
 const bulkdm = require("./bulkdm.js");
 const { createAcceptPanel, RULES_PANEL_CONFIG, MARKETPLACE_PANEL_CONFIG } = require("./acceptpanel.js");
@@ -48,6 +49,7 @@ const marketplacePanel = createAcceptPanel(MARKETPLACE_PANEL_CONFIG, client);
 const commands = [
     massDm.command,
     ...promoter.commands,
+    ...teamApplication.commands,
     ...promoterLog.commands,
 
     ...rulesPanel.commands,
@@ -203,20 +205,10 @@ client.on("interactionCreate", async interaction => {
             return await promoterLog.handlePageButton(interaction);
         }
 
-        if (interaction.isChatInputCommand() && interaction.commandName === "promoter") {
-            return await promoter.handleCommand(interaction, client);
-        }
+        if (await promoter.handle(interaction, client) || await teamApplication.handle(interaction, client)) return;
 
-        if (interaction.isChatInputCommand() && interaction.commandName === "promoter-applications") {
-            return await promoter.handleStatusCommand(interaction);
-        }
-
-        if (interaction.isModalSubmit() && promoter.isForm(interaction.customId)) {
-            return await promoter.handleForm(interaction, client);
-        }
-
-        if (interaction.isButton() && tickets.isPromoterButton(interaction.customId)) {
-            return await tickets.handlePromoterButton(interaction, client);
+        if (interaction.isButton() && tickets.isApplicationButton(interaction.customId)) {
+            return await tickets.handleApplicationButton(interaction, client);
         }
 
         if (interaction.isChatInputCommand() && interaction.commandName === "ticket-panel") {

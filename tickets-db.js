@@ -18,15 +18,25 @@ db.exec(`
         close_reason TEXT
     );
 
-    CREATE TABLE IF NOT EXISTS promoter_settings (
-        guild_id TEXT PRIMARY KEY,
+    CREATE TABLE IF NOT EXISTS application_settings (
+        guild_id TEXT NOT NULL,
+        kind TEXT NOT NULL,
         closed INTEGER NOT NULL DEFAULT 0,
-        closed_message TEXT
+        closed_message TEXT,
+        PRIMARY KEY (guild_id, kind)
     );
 
     CREATE INDEX IF NOT EXISTS idx_tickets_channel ON tickets (channel_id);
     CREATE INDEX IF NOT EXISTS idx_tickets_user_open ON tickets (guild_id, user_id, category, status);
 `);
+
+// Earlier versions only had the promoter setting, in its own table.
+if (db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'promoter_settings'").get()) {
+    db.exec(`
+        INSERT OR IGNORE INTO application_settings (guild_id, kind, closed, closed_message)
+        SELECT guild_id, 'promoter', closed, closed_message FROM promoter_settings
+    `);
+}
 
 // The row is created BEFORE the channel (its id is used in the channel name),
 // so a double click is already blocked while the channel is still being made.
@@ -74,21 +84,23 @@ function closeTicket(ticketId, closedBy, reason) {
     `).run(Date.now(), closedBy, reason || null, ticketId);
 }
 
-function getPromoterSettings(guildId) {
-    const row = db.prepare("SELECT closed, closed_message FROM promoter_settings WHERE guild_id = ?").get(guildId);
+function getApplicationSettings(guildId, kind) {
+    const row = db.prepare(
+        "SELECT closed, closed_message FROM application_settings WHERE guild_id = ? AND kind = ?"
+    ).get(guildId, kind);
     return { closed: Boolean(row?.closed), message: row?.closed_message ?? null };
 }
 
-function setPromoterClosed(guildId, closed, message) {
+function setApplicationClosed(guildId, kind, closed, message) {
     db.prepare(`
-        INSERT INTO promoter_settings (guild_id, closed, closed_message) VALUES (?, ?, ?)
-        ON CONFLICT(guild_id) DO UPDATE SET closed = excluded.closed, closed_message = excluded.closed_message
-    `).run(guildId, closed ? 1 : 0, message || null);
+        INSERT INTO application_settings (guild_id, kind, closed, closed_message) VALUES (?, ?, ?, ?)
+        ON CONFLICT(guild_id, kind) DO UPDATE SET closed = excluded.closed, closed_message = excluded.closed_message
+    `).run(guildId, kind, closed ? 1 : 0, message || null);
 }
 
 module.exports = {
-    getPromoterSettings,
-    setPromoterClosed,
+    getApplicationSettings,
+    setApplicationClosed,
     createTicket,
     setChannelId,
     deleteTicket,

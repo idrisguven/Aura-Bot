@@ -30,6 +30,8 @@ const DELETE_DELAY_MS = 5000;
 
 // The Discord category promotion application tickets are created in.
 const PROMOTER_CATEGORY_ID = "1558173074568912986";
+// The Discord category team application tickets are created in.
+const TEAM_CATEGORY_ID = "1558489162129215509";
 
 // parentId = the Discord category (folder) the ticket channel is created in.
 const CATEGORIES = {
@@ -59,12 +61,39 @@ const CATEGORIES = {
         parentId: PROMOTER_CATEGORY_ID,
         inPanel: false,
         intro: "Please include links to your channel(s), the platform(s) you use, and your average viewership or follower count."
+    },
+    // Opened from the /teamapplication announcement button, like promoter above.
+    team: {
+        label: "Team Application",
+        emoji: "👥",
+        description: "Apply to join the team",
+        parentId: TEAM_CATEGORY_ID,
+        inPanel: false,
+        intro: "Please tell us which position you are applying for, a bit about yourself, your relevant experience and how much time you can dedicate."
     }
 };
 
-// Old announcements carry a category id after the prefix; it is ignored now.
-const PROMOTER_BUTTON_PREFIX = "ticket_promoter_";
-const PROMOTER_BUTTON_ID = `${PROMOTER_BUTTON_PREFIX}apply`;
+// Announcements with an "apply" button (/promoter, /teamapplication). The key
+// is also the ticket type in CATEGORIES. Old announcements carry an extra
+// suffix after the prefix, which is ignored.
+const APPLICATIONS = {
+    promoter: {
+        buttonId: "ticket_promoter_apply",
+        prefix: "ticket_promoter_",
+        defaultClosedNotice:
+            "❗ Promoter applications are currently closed — our hobbyist promoter roster is full until further notice. " +
+            "We will announce when there is space available again.\n" +
+            "If you are a professional with a very large audience, please contact the team and we will get in touch with you.\n" +
+            "Thank you for understanding."
+    },
+    team: {
+        buttonId: "ticket_team_apply",
+        prefix: "ticket_team_",
+        defaultClosedNotice:
+            "❗ Team applications are currently closed. We will announce when we start accepting applications again.\n" +
+            "Thank you for understanding."
+    }
+};
 
 function isStaff(interaction) {
     const permissions = interaction.memberPermissions;
@@ -290,7 +319,7 @@ async function handleSelect(interaction, client) {
     // menu back lets people pick the same type again later.
     interaction.message.edit({ components: [buildPanelRow()] }).catch(() => {});
 
-    // Types that aren't in the panel (promoter) can only be opened from their own button.
+    // Types that aren't in the panel (promoter, team) can only be opened from their own button.
     if (!category || category.inPanel === false) {
         return interaction.reply({
             content: "❌ That ticket type is no longer available.",
@@ -302,32 +331,32 @@ async function handleSelect(interaction, client) {
     return openTicket(interaction, client, key, category.parentId);
 }
 
-function isPromoterButton(customId) {
-    return customId.startsWith(PROMOTER_BUTTON_PREFIX);
+function applicationKind(customId) {
+    return Object.keys(APPLICATIONS).find(kind => customId.startsWith(APPLICATIONS[kind].prefix));
 }
 
-const DEFAULT_CLOSED_NOTICE =
-    "❗ Promoter applications are currently closed — our hobbyist promoter roster is full until further notice. " +
-    "We will announce when there is space available again.\n" +
-    "If you are a professional with a very large audience, please contact the team and we will get in touch with you.\n" +
-    "Thank you for understanding.";
+function isApplicationButton(customId) {
+    return applicationKind(customId) !== undefined;
+}
 
 /**
- * Button on a /promoter announcement: opens a promotion application ticket,
- * or shows the "applications are closed" notice (visible only to the person
- * who clicked) while an administrator has applications closed.
+ * Button on an application announcement: opens that kind of application
+ * ticket, or shows the "applications are closed" notice (visible only to the
+ * person who clicked) while an administrator has applications closed.
  */
-async function handlePromoterButton(interaction, client) {
-    const settings = db.getPromoterSettings(interaction.guild.id);
+async function handleApplicationButton(interaction, client) {
+    const kind = applicationKind(interaction.customId);
+    const settings = db.getApplicationSettings(interaction.guild.id, kind);
+
     if (settings.closed) {
         return interaction.reply({
-            content: settings.message || DEFAULT_CLOSED_NOTICE,
+            content: settings.message || APPLICATIONS[kind].defaultClosedNotice,
             flags: MessageFlags.Ephemeral
         });
     }
 
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    return openTicket(interaction, client, "promoter", CATEGORIES.promoter.parentId);
+    return openTicket(interaction, client, kind, CATEGORIES[kind].parentId);
 }
 
 /** Creates the private ticket channel. The reply must already be deferred. */
@@ -622,13 +651,11 @@ async function sendCloseDm(client, interaction, ticket, category) {
 }
 
 module.exports = {
-    PROMOTER_CATEGORY_ID,
-    DEFAULT_CLOSED_NOTICE,
-    PROMOTER_BUTTON_PREFIX,
-    PROMOTER_BUTTON_ID,
+    APPLICATIONS,
+    CATEGORIES,
     isTicketChannel,
-    isPromoterButton,
-    handlePromoterButton,
+    isApplicationButton,
+    handleApplicationButton,
     SELECT_ID,
     CLOSE_FORM_ID,
     isTicketButton,
