@@ -52,4 +52,30 @@ function formatTags(text) {
         .join("");
 }
 
-module.exports = { formatTags };
+const TAG_BY_CODE = Object.fromEntries(Object.entries(CODES).map(([name, code]) => [code, name]));
+
+/**
+ * The reverse of formatTags: shows a coloured ```ansi block as editable
+ * {red}..{/red} tags again, so an already posted message can be edited.
+ */
+function unformatTags(text) {
+    return text.replace(/```ansi\n([\s\S]*?)```/g, (block, body) => {
+        const open = [];
+
+        const converted = body.replace(new RegExp(`${ESC}\\[(\\d+)m`, "g"), (match, code) => {
+            if (code === "0") {
+                const name = open.pop();
+                return name ? `{/${name}}` : "";
+            }
+            const name = TAG_BY_CODE[code];
+            if (!name) return "";
+            open.push(name);
+            return `{${name}}`;
+        });
+
+        const unclosed = open.reverse().map(name => `{/${name}}`).join("");
+        return "```\n" + converted.replace(/\n$/, "") + unclosed + "\n```";
+    });
+}
+
+module.exports = { formatTags, unformatTags };

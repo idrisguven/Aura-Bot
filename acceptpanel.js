@@ -12,6 +12,8 @@ const {
     MessageFlags
 } = require("discord.js");
 
+const { formatTags, unformatTags } = require("./format.js");
+
 const EMBED_COLOR = "#7B2FF7";
 
 /**
@@ -124,7 +126,7 @@ function createAcceptPanel(config, client) {
     async function handlePostForm(interaction) {
         const channelId = interaction.customId.slice(config.formPrefix.length);
         const title = interaction.fields.getTextInputValue("title")?.trim() || config.defaultTitle;
-        const content = interaction.fields.getTextInputValue("content");
+        const content = formatTags(interaction.fields.getTextInputValue("content"));
 
         const channel = interaction.guild.channels.cache.get(channelId)
             || await interaction.guild.channels.fetch(channelId).catch(() => null);
@@ -186,7 +188,7 @@ function createAcceptPanel(config, client) {
         const modal = new ModalBuilder()
             .setCustomId(`${config.editPrefix}${ref.channelId}_${ref.messageId}`)
             .setTitle(config.editModalTitle)
-            .addComponents(buildInputs({ title: embed.title, content: embed.description }));
+            .addComponents(buildInputs({ title: embed.title, content: unformatTags(embed.description ?? "") }));
 
         return interaction.showModal(modal);
     }
@@ -194,7 +196,7 @@ function createAcceptPanel(config, client) {
     async function handleEditForm(interaction) {
         const [channelId, messageId] = interaction.customId.slice(config.editPrefix.length).split("_");
         const title = interaction.fields.getTextInputValue("title")?.trim() || config.defaultTitle;
-        const content = interaction.fields.getTextInputValue("content");
+        const content = formatTags(interaction.fields.getTextInputValue("content"));
 
         const message = await fetchOwnMessage(interaction.guild, { guildId: null, channelId, messageId });
         if (!message) {
