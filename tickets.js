@@ -125,7 +125,29 @@ function sanitizeName(name) {
     return cleaned || "user";
 }
 
+const PANEL_BUTTON_PREFIX = "ticket_open_";
+
+function isPanelButton(customId) {
+    return customId.startsWith(PANEL_BUTTON_PREFIX);
+}
+
+/** The ticket panel: one button per ticket type. */
 function buildPanelRow() {
+    return new ActionRowBuilder().addComponents(
+        Object.entries(CATEGORIES)
+            .filter(([, category]) => category.inPanel !== false)
+            .map(([key, category]) =>
+                new ButtonBuilder()
+                    .setCustomId(`${PANEL_BUTTON_PREFIX}${key}`)
+                    .setLabel(category.label)
+                    .setEmoji(category.emoji)
+                    .setStyle(ButtonStyle.Secondary)
+            )
+    );
+}
+
+/** The old dropdown version of the panel (panels posted before the buttons still use it). */
+function buildPanelSelectRow() {
     return new ActionRowBuilder().addComponents(
         new StringSelectMenuBuilder()
             .setCustomId(SELECT_ID)
@@ -313,13 +335,30 @@ async function handlePanelForm(interaction) {
 
 // ---------- opening a ticket ----------
 
+/** A button on the ticket panel. */
+async function handlePanelButton(interaction, client) {
+    const key = interaction.customId.slice(PANEL_BUTTON_PREFIX.length);
+    const category = CATEGORIES[key];
+
+    // Application types (promoter, team) have their own announcements.
+    if (!category || category.inPanel === false) {
+        return interaction.reply({
+            content: "❌ That ticket type is no longer available.",
+            flags: MessageFlags.Ephemeral
+        });
+    }
+
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    return openTicket(interaction, client, key, category.parentId);
+}
+
 async function handleSelect(interaction, client) {
     const key = interaction.values[0];
     const category = CATEGORIES[key];
 
     // Selecting an option leaves it highlighted in the menu; putting a fresh
     // menu back lets people pick the same type again later.
-    interaction.message.edit({ components: [buildPanelRow()] }).catch(() => {});
+    interaction.message.edit({ components: [buildPanelSelectRow()] }).catch(() => {});
 
     // Types that aren't in the panel (promoter, team) can only be opened from their own button.
     if (!category || category.inPanel === false) {
@@ -710,6 +749,8 @@ module.exports = {
     SELECT_ID,
     CLOSE_FORM_ID,
     isTicketButton,
+    isPanelButton,
+    handlePanelButton,
     isPanelForm,
     handlePanelCommand,
     handlePanelForm,

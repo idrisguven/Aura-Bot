@@ -223,6 +223,10 @@ client.on("interactionCreate", async interaction => {
             return await tickets.handlePanelForm(interaction);
         }
 
+        if (interaction.isButton() && tickets.isPanelButton(interaction.customId)) {
+            return await tickets.handlePanelButton(interaction, client);
+        }
+
         if (interaction.isStringSelectMenu() && interaction.customId === tickets.SELECT_ID) {
             return await tickets.handleSelect(interaction, client);
         }
