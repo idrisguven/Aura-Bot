@@ -8,6 +8,8 @@ const {
 } = require("discord.js");
 
 const BUTTON_PREFIX = "country_";
+// Flag buttons shown privately right after someone accepts the rules.
+const ONBOARDING_PREFIX = "onboard_country_";
 const EMBED_COLOR = "#7B2FF7";
 
 const LANGUAGES = [
@@ -25,6 +27,24 @@ const LANGUAGES = [
 
 const LANGUAGES_BY_ROLE_ID = new Map(LANGUAGES.map(lang => [lang.roleId, lang]));
 
+function buildFlagRows(prefix) {
+    const rows = [];
+    for (let i = 0; i < LANGUAGES.length; i += 5) {
+        rows.push(
+            new ActionRowBuilder().addComponents(
+                LANGUAGES.slice(i, i + 5).map(lang =>
+                    new ButtonBuilder()
+                        .setCustomId(`${prefix}${lang.roleId}`)
+                        .setLabel(lang.name)
+                        .setEmoji(lang.flag)
+                        .setStyle(ButtonStyle.Secondary)
+                )
+            )
+        );
+    }
+    return rows;
+}
+
 function buildPanel() {
     const embed = new EmbedBuilder()
         .setColor(EMBED_COLOR)
@@ -34,26 +54,29 @@ function buildPanel() {
             "You can pick more than one. Click again to remove a role."
         );
 
-    const rows = [];
-    for (let i = 0; i < LANGUAGES.length; i += 5) {
-        rows.push(
-            new ActionRowBuilder().addComponents(
-                LANGUAGES.slice(i, i + 5).map(lang =>
-                    new ButtonBuilder()
-                        .setCustomId(`${BUTTON_PREFIX}${lang.roleId}`)
-                        .setLabel(lang.name)
-                        .setEmoji(lang.flag)
-                        .setStyle(ButtonStyle.Secondary)
-                )
-            )
-        );
-    }
+    return { embeds: [embed], components: buildFlagRows(BUTTON_PREFIX) };
+}
 
-    return { embeds: [embed], components: rows };
+/** The private "choose your country" step shown after accepting the rules. */
+function buildOnboardingPanel() {
+    const embed = new EmbedBuilder()
+        .setColor(EMBED_COLOR)
+        .setTitle("🌍 One last step")
+        .setDescription("Thanks for accepting the rules! **Choose your country** below to unlock the rest of the server.");
+
+    return { embeds: [embed], components: buildFlagRows(ONBOARDING_PREFIX) };
+}
+
+function hasLanguageRole(member) {
+    return LANGUAGES.some(lang => member.roles.cache.has(lang.roleId));
 }
 
 function isCountryButton(customId) {
     return customId.startsWith(BUTTON_PREFIX);
+}
+
+function isOnboardingButton(customId) {
+    return customId.startsWith(ONBOARDING_PREFIX);
 }
 
 async function handleCommand(interaction, client) {
@@ -143,4 +166,44 @@ async function handleButton(interaction) {
     }
 }
 
-module.exports = { LANGUAGES, isCountryButton, buildPanel, handleCommand, handleButton };
+/**
+ * A flag in the private step after the rules: gives the language role and
+ * the role that unlocks the server (Player) together.
+ */
+async function handleOnboardingButton(interaction, unlockRoleId) {
+    const fail = content => interaction.update({ content, embeds: [], components: [] });
+
+    const language = LANGUAGES_BY_ROLE_ID.get(interaction.customId.slice(ONBOARDING_PREFIX.length));
+    if (!language) return fail("❌ This language option is no longer available. Click Accept again.");
+
+    const languageRole = interaction.guild.roles.cache.get(language.roleId);
+    const unlockRole = interaction.guild.roles.cache.get(unlockRoleId);
+    if (!languageRole || !unlockRole) {
+        console.error(`Onboarding: role missing in guild ${interaction.guild.id} (language ${language.roleId}, unlock ${unlockRoleId}).`);
+        return fail("❌ A role could not be found. Please contact an administrator.");
+    }
+
+    const me = await interaction.guild.members.fetchMe();
+    const highest = Math.max(languageRole.position, unlockRole.position);
+    if (!me.permissions.has(PermissionFlagsBits.ManageRoles) || me.roles.highest.position <= highest) {
+        console.error("Onboarding: missing Manage Roles or my highest role is not above the language/unlock role.");
+        return fail("❌ I can't assign your roles right now. Please contact an administrator.");
+    }
+
+    try {
+        await interaction.member.roles.add([languageRole, unlockRole], `Accepted the rules and chose ${language.name}`);
+        return interaction.update({
+            content: `${language.flag} Welcome! You now have the **${language.name}** and **${unlockRole.name}** roles — all channels are unlocked.`,
+            embeds: [],
+            components: []
+        });
+    } catch (error) {
+        console.error(`Onboarding: failed to assign roles (${language.name}):`, error);
+        return fail("❌ Something went wrong while assigning your roles. Please contact an administrator.");
+    }
+}
+
+module.exports = {
+    LANGUAGES, isCountryButton, isOnboardingButton, hasLanguageRole,
+    buildPanel, buildOnboardingPanel, handleCommand, handleButton, handleOnboardingButton
+};

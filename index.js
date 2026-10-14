@@ -251,6 +251,10 @@ client.on("interactionCreate", async interaction => {
             return await countrySelection.handleButton(interaction);
         }
 
+        if (interaction.isButton() && countrySelection.isOnboardingButton(interaction.customId)) {
+            return await countrySelection.handleOnboardingButton(interaction, RULES_PANEL_CONFIG.roleId);
+        }
+
     } catch (error) {
         console.error("Interaction error:", error);
     }

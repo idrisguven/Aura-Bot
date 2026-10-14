@@ -13,6 +13,7 @@ const {
 } = require("discord.js");
 
 const { formatTags, unformatTags } = require("./format.js");
+const countrySelection = require("./countryselection.js");
 
 const EMBED_COLOR = "#7B2FF7";
 
@@ -25,7 +26,8 @@ const EMBED_COLOR = "#7B2FF7";
  *   roleId, roleName, defaultTitle, modalTitle, editModalTitle,
  *   contentLabel, contentPlaceholder, messageNoun,
  *   commandDescription, editCommandDescription, channelOptionDescription,
- *   alreadyText, successText, auditReason
+ *   alreadyText, successText, auditReason,
+ *   requireLanguage   // optional: ask for a country first; the role comes with the flag
  * }
  */
 function createAcceptPanel(config, client) {
@@ -233,6 +235,11 @@ function createAcceptPanel(config, client) {
             return ephemeral(interaction, `❌ I can't assign the ${config.roleName} role right now. Please contact an administrator.`);
         }
 
+        // The role is handed out together with the language role, once a flag is picked.
+        if (config.requireLanguage && !countrySelection.hasLanguageRole(member)) {
+            return interaction.reply({ ...countrySelection.buildOnboardingPanel(), flags: MessageFlags.Ephemeral });
+        }
+
         try {
             await member.roles.add(role, config.auditReason);
             return ephemeral(interaction, config.successText);
@@ -276,6 +283,8 @@ const RULES_PANEL_CONFIG = {
     editPrefix: "rules_edit_",
     roleId: PLAYER_ROLE_ID,
     roleName: "Player",
+    // New members must pick a country before the Player role unlocks the server.
+    requireLanguage: true,
     defaultTitle: "Server Rules",
     modalTitle: "Server Rules",
     editModalTitle: "Edit Server Rules",
