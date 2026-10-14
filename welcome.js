@@ -63,7 +63,10 @@ async function handleMemberAdd(member) {
         : `🔂 ${member} has re-joined the server!`;
 
     try {
-        await channel.send({ content: text, allowedMentions: { parse: [] } });
+        // The new member is pinged on purpose: a mention that doesn't ping
+        // isn't sent with the user's details, so Discord shows "@unknown-user"
+        // to everyone who hasn't loaded that member yet.
+        await channel.send({ content: text, allowedMentions: { users: [member.id] } });
     } catch (error) {
         console.error("Failed to send join message:", error.message);
     }

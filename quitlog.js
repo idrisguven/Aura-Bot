@@ -9,7 +9,9 @@ async function handleMemberRemove(member) {
 
     try {
         await channel.send({
-            content: `❌ <@${member.id}> quit from server`,
+            // They already left, so the mention usually shows as "@unknown-user";
+            // the name next to it says who it was.
+            content: `❌ <@${member.id}>${member.user?.username ? ` (**${member.user.username}**)` : ""} quit from server`,
             allowedMentions: { parse: [] }
         });
     } catch (error) {
